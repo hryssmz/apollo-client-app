@@ -1,5 +1,5 @@
 // stories/data/comment.ts
-import type { Comment } from "@/models";
+import type { Comment } from "@/graphql/graphql";
 
 export const comments: readonly Comment[] = [
   {

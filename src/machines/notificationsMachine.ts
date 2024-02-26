@@ -2,7 +2,7 @@
 import { assertEvent, assign, fromPromise, setup } from "xstate";
 import { api } from "@/utils/axios";
 import { GET_UNREAD_NOTIFICATIONS, UPDATE_NOTIFICATION } from "@/queries";
-import type { SnapshotFrom } from "xstate";
+import type { ActorRef, SnapshotFrom } from "xstate";
 import type {
   Mutation,
   MutationUpdateNotificationArgs,
@@ -18,8 +18,8 @@ export interface NotificationsMachineContext {
 export type NotificationsMachineEvents =
   | ({ type: "FETCH" } & QueryGetUnreadNotificationsArgs)
   | ({ type: "UPDATE" } & MutationUpdateNotificationArgs)
-  | { type: "SUCCESS"; results?: Notification[] }
-  | { type: "FAILURE" };
+  | { type: "xstate.done.actor.loading"; output: Notification[] }
+  | { type: "xstate.done.actor.updating"; output: Notification };
 
 export const notificationsMachine = setup({
   types: {
@@ -29,92 +29,80 @@ export const notificationsMachine = setup({
   actors: {
     "fetch data": fromPromise(
       async ({ input }: { input: QueryGetUnreadNotificationsArgs }) => {
-        const response = await api.post<{ data: Query }>("/graphql", {
-          query: GET_UNREAD_NOTIFICATIONS,
-          variables: input,
-        });
-        const { getUnreadNotifications } = response.data.data;
-        return { results: getUnreadNotifications };
+        const response = await api.post<{
+          data: Pick<Query, "getUnreadNotifications">;
+        }>("/graphql", { query: GET_UNREAD_NOTIFICATIONS, variables: input });
+        return response.data.data.getUnreadNotifications;
       }
     ),
     "update data": fromPromise(
       async ({ input }: { input: MutationUpdateNotificationArgs }) => {
-        await api.post<{ data: Mutation }>("/graphql", {
-          query: UPDATE_NOTIFICATION,
-          variables: input,
-        });
+        const response = await api.post<{
+          data: Pick<Mutation, "updateNotification">;
+        }>("/graphql", { query: UPDATE_NOTIFICATION, variables: input });
+        return response.data.data.updateNotification;
       }
     ),
   },
   actions: {
     "set results": assign(({ event }) => {
-      assertEvent(event, "SUCCESS");
-      return { results: event.results };
+      assertEvent(event, "xstate.done.actor.loading");
+      return { results: event.output };
     }),
   },
 }).createMachine({
-  /** @xstate-layout N4IgpgJg5mDOIC5QDsD2AXAlgM0wYwEMtVlYA6AG1QIk2SgGIISwy6A3VAa1bS10LFSlarXoIOqQZhIBtAAwBdBYsSgADqliYhakAA9EARgAcJsgE4rVgEwmALAGYA7ADZnRgDQgAnohv2NmQArPJhYSaOFjY2Fo6uAL4J3nw4+EQywlQ0dIxgAE75qPlk6hRE2MUAtmSpAhkk5NliUBLInNJySip6mtq6SAaIwQ5k9vKuNsH2RlNG8o5evoiO9uYxrsGrI-JxUYnJIHXpQuQAruoQGfRMLGzt3LwYaZ3CF1dY4pKvKj2DfTpMnpDAgjBYjGQTHZZgtnAFgkZpt4-AgTBDQuFFvY4c5pkYkilnvVTmR3tc8oViqVyuhKvkasdXudLuS2h0GshfkpelpASRgcNRuNJni5gsliiLM4xkZXHKTM5djZHMEbASjkSTplyLAzng8HBYAwAGIAUQAKgBhAASfw0vIGoBBpnM1lsDhc7glKzlli28lxuOViIOhP4WsaZF1+sNDAAqgAFAAiAEFzaa7SAAY6hqCzJY3XYnG4PMjjK55CFwvIoa4TBYJtj1YyOeRsARMBQzvkwCaLTbM9mgYMQcFomM6x44sqa4EywgbL6NtMbPJ5q4jPNnElDmgIHA9C3Tjz+sOnYgALSuecX4IFt0P6yOZuapkiHL0E985AChCONGQrMqo2M4aKrjMzjziBQRRI4NimCM0Srviu6vq2pIsp8UBfjmIIuOY0x1pErguDEUrzvmcpys49gjBBRgqi+4ZvtGBqwPA-wOmeuZzssoIBmQjjVlYoTBJsIxMS86Htp23ZgDh3Egm4riWBMUy0as-7yPYUFQmMbjTPWa4WGOEw7gkQA */
+  /** @xstate-layout N4IgpgJg5mDOIC5QDsD2AXAlgM0wYwEMtVlYA6TZTLAgGwGIAxAUQBUBhACQG0AGAXUSgADqljVMJISAAeiAGwAWAMxkAHAHYArABoQAT0SKATMbIBOLcoCMy4-OPnl5xVYC+bvWiy5CxUmS0qAQQlFD0ECRgFMgAbqgA1tFBIWF8gkggouL+0nIISqqaugaIxtbyZFoeXhg4+ESSASmhyOFgAE4dqB1kwrRE2D0AtoHBrVDp0tkSUpn51rzmvGTyxXqGCIrWZrzKSvJa5g4axhrmNSDe9X5N5ACuwhCNbRFRMfFJZI-PWG1TmRmuXmiGUyhW1i0DhKmxsGjIpkO8nkNkU8nMpw0l2uvkaJAeTxe7S6PT6A3QQw6ox+RIBIjEs2QeVB4LIkOhG0QamsVWxdVx-nIsHueDwcFgTDYXDpWQZwNA+UK6m0nIQykUK0sNjsDicLncniu-IagrIwtF4voAFUAAoAEQAgqxmDKgU1mWrlGoyDZjDCysotAj7FCUdY0RiznyfCa7mRsARMLR7h0wJKODwBNM5e6QQhFstVutSp6VnsDkcTmcLnyIHBpDjY-jszlcwrEABaeSqrvRm54gKUCR0FuMj1aCrK-1bZwIva2eyOZyuZR9gVxlphUfy2RcsFkEzWYuw-Zz7WLvUrtdNgI0v5Qbdt3dbYyqyw+7TX274s0isWweBARzOZ2wQCdKmPMojiqI41HMY5FDUPZeHkL8B3IBMkxTMBHxA58dkONk-VVdVKmMNQK2OM5qw8DwgA */
   id: "notifications",
-  initial: "success",
+  initial: "initial",
   context: {
     results: [],
   },
   states: {
+    initial: {
+      on: {
+        FETCH: { target: "loading" },
+      },
+    },
     loading: {
       invoke: {
+        id: "loading",
         src: "fetch data",
         input: ({ event }) => {
-          assertEvent(event, "FETCH");
-          const { type, ...input } = event;
-          return input;
+          assertEvent(event, ["FETCH", "xstate.done.actor.updating"]);
+          switch (event.type) {
+            case "FETCH":
+              const { type, ...input } = event;
+              return input;
+            case "xstate.done.actor.updating":
+              return { userId: event.output.userId };
+          }
         },
-        onDone: {
-          description: "Notifications fetched",
-          target: "success",
-          actions: "set results",
-        },
-        onError: {
-          description: "Fetch error",
-          target: "failure",
-        },
+        onDone: { target: "success", actions: "set results" },
+        onError: { target: "failure" },
       },
     },
     updating: {
       invoke: {
+        id: "updating",
         src: "update data",
         input: ({ event }) => {
           assertEvent(event, "UPDATE");
           const { type, ...input } = event;
           return input;
         },
-        onDone: {
-          description: "Notification updated",
-          target: "success",
-        },
-        onError: {
-          description: "Update error",
-          target: "failure",
-        },
+        onDone: { target: "loading" },
+        onError: { target: "failure" },
       },
     },
     success: {
       on: {
-        FETCH: {
-          description: "Fetch notifications",
-          target: "loading",
-        },
-        UPDATE: {
-          description: "Update notification",
-          target: "updating",
-        },
+        FETCH: { target: "loading" },
+        UPDATE: { target: "updating" },
       },
     },
     failure: {
       on: {
-        FETCH: {
-          description: "Fetch notifications",
-          target: "loading",
-        },
+        FETCH: { target: "loading" },
       },
     },
   },
@@ -122,3 +110,7 @@ export const notificationsMachine = setup({
 
 export type NotificationsMachine = typeof notificationsMachine;
 export type NotificationsSnapshot = SnapshotFrom<NotificationsMachine>;
+export type NotificationsActorRef = ActorRef<
+  NotificationsSnapshot,
+  NotificationsMachineEvents
+>;

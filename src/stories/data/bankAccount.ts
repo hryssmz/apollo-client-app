@@ -1,5 +1,5 @@
 // stories/data/bankAccount.ts
-import type { BankAccount } from "@/models";
+import type { BankAccount } from "@/graphql/graphql";
 
 export const bankAccounts: readonly BankAccount[] = [
   {

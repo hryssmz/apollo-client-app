@@ -18,6 +18,13 @@ export const UPDATE_NOTIFICATION = `#graphql
   mutation UpdateNotification($payload: UpdateNotification!) {
     updateNotification(payload: $payload) {
       id
+      uuid
+      userId
+      transactionId
+      message
+      isRead
+      createdAt
+      modifiedAt
     }
   }
 `;

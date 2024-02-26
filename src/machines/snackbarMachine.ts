@@ -1,5 +1,5 @@
 // machines/snackbarMachine.ts
-import { assertEvent, createActor, assign, setup } from "xstate";
+import { assertEvent, assign, setup } from "xstate";
 import type { ActorRef, SnapshotFrom } from "xstate";
 import type { AlertColor } from "@mui/material/Alert";
 
@@ -35,25 +35,15 @@ export const snackbarMachine = setup({
   states: {
     invisible: {
       on: {
-        SHOW: {
-          description: "display snackbar",
-          target: "visible",
-          actions: "set snackbar",
-        },
+        SHOW: { target: "visible", actions: "set snackbar" },
       },
     },
     visible: {
       after: {
-        "auto hide": {
-          description: "Auto hide snackbar",
-          target: "invisible",
-        },
+        "auto hide": { target: "invisible" },
       },
       on: {
-        HIDE: {
-          description: "Hide snackbar",
-          target: "invisible",
-        },
+        HIDE: { target: "invisible" },
       },
     },
   },
